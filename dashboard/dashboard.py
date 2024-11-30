@@ -7,7 +7,7 @@ from babel.numbers import format_currency
 st.set_page_config(page_title="Ridho's Dashboard")
 plt.style.use('dark_background')
 
-all_df = pd.read_csv('./all_dataframe.csv')
+all_df = pd.read_csv('all_dataframe.csv')
 
 # Function Data
 def create_daily_orders_df(df):

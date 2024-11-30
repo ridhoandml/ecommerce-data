@@ -24,26 +24,18 @@ def create_daily_orders_df(df):
   }, inplace=True)
   return returned_df
 
-def create_sum_order_items_df(df):
-  returned_df = df.groupby("product_category_name_english").agg(
-     order_count=("order_id", "nunique"),
-     revenue=("payment_value", "sum")
-	).sort_values(by="revenue", ascending=False).reset_index()
-  
-  returned_df.rename(columns={
-    "product_category_name_english": "category"
-  }, inplace=True)
-  return returned_df
+def create_categories_in_years(df):
+  return df.groupby(["year", 'product_category_name_english']).agg(
+		count_orders=("order_id", "count"),
+		total_revenue=("payment_value", "sum")
+	).reset_index().sort_values(by=["year", "total_revenue"], ascending=[True, False])
 
-def create_users_city_df(df):
-  return df.groupby("customer_city").agg(
-    customer_count=("customer_id", "nunique")
-	)
-
-def create_users_payment_type_df(df):
-  return df.groupby("payment_type").agg(
-    customer_count=("customer_id", "count")
-	)
+def create_cities_orders_and_users(df):
+  return df.groupby('customer_city').agg(
+	count_users=("customer_id", "count"),
+	count_orders=("order_id", "count"),
+	total_revenue=("payment_value", "sum")
+).reset_index()
 
 def create_rfm_df(df):
   returned_df = df.groupby(by="customer_id", as_index=False).agg(
@@ -111,9 +103,8 @@ start_date, end_date = st.date_input(
 main_df = all_df[(all_df["order_delivered_customer_date"] >= str(start_date)) &  (all_df["order_delivered_customer_date"] <= str(end_date))]
 
 total_orders_df = create_daily_orders_df(main_df)
-sum_order_items_df = create_sum_order_items_df(main_df)
-users_city_df = create_users_city_df(main_df)
-users_payment_type_df = create_users_payment_type_df(main_df)
+categories_in_years = create_categories_in_years(main_df)
+cities_orders_and_users = create_cities_orders_and_users(main_df)
 rfm_df = create_rfm_df(main_df)
 
 st.header('Ecommerce Revenue')
@@ -140,45 +131,63 @@ ax.tick_params(axis='x', labelsize=15)
 
 st.pyplot(fig)
 
-st.subheader("Best & Worst Performing Categories")
-st.text("Sort by Order Count")
-   
-generate_couple_chart(
-  data_frame_1=sum_order_items_df.head(5),
-  data_frame_2=sum_order_items_df.sort_values(by="revenue", ascending=True).head(5),
-  x_1="order_count",
-  x_2="order_count",
-  y_1="category",
-  y_2="category",
-  title_1="Number of Orders",
-  title_2="Number of Orders"
+st.subheader("In the last 5 years, what product categories have generated the most revenue")
+
+top_5_per_year = categories_in_years.groupby("year").head(5)
+top_5_per_year = top_5_per_year.reset_index(drop=True)
+top_5_per_year.sort_values(by="year", ascending=False)
+
+fig, ax = plt.subplots(figsize=(35, 15))
+sns.barplot(
+  y="total_revenue",
+  x="year",
+  data=top_5_per_year,
+  hue="product_category_name_english",
+  ax=ax
+)
+plt.legend(fontsize="24", title_fontsize="40", loc="upper left", bbox_to_anchor=(1, 1))
+ax.set_title("Revenue Category by Year", loc="center", fontsize=50)
+ax.set_ylabel("Total Revenue (in millions)", fontsize=30)
+ax.set_xlabel("Year", fontsize=30)
+ax.tick_params(axis='y', labelsize=30)
+ax.tick_params(axis='x', labelsize=35)
+st.pyplot(fig)
+
+st.subheader("Which cities have the most orders and the most users")
+
+limit_ten = cities_orders_and_users.sort_values(by="count_orders", ascending=False).head(10)
+
+fig, ax = plt.subplots(figsize=(35, 15))
+sns.barplot(
+  y="count_orders",
+  x="customer_city",
+	ax=ax,
+  data=limit_ten,
+	color="#ffff0f"
 )
 
-st.text("Sort by Order Revenue")
+ax.legend(title="Orders", title_fontsize="24", loc="upper left", bbox_to_anchor=(0.95, 1))
+ax.set_ylabel("Orders", fontsize=30)
+ax.set_xlabel("City Name", fontsize=30)
+ax.tick_params(axis='y', labelsize=30)
+ax.tick_params(axis='x', labelsize=35)
+ax.set_title("Top 5 City Orders and Users", fontsize=50)
 
-generate_couple_chart(
-  data_frame_1=sum_order_items_df.head(5),
-  data_frame_2=sum_order_items_df.sort_values(by="revenue", ascending=True).head(5),
-  x_1="revenue",
-  x_2="revenue",
-  y_1="category",
-  y_2="category",
-  title_1="Number of Revenue",
-  title_2="Number of Revenue"
+ax2 = ax.twinx()
+ax2.plot(
+    limit_ten["customer_city"], 
+    limit_ten["count_users"], 
+    color="red",
+    marker="o", 
+    linewidth=3,
+    label="Users"
 )
 
-st.subheader("Customer Insight")
+ax2.legend(fontsize="24", loc="upper left", bbox_to_anchor=(0.9, 0.95))
+ax2.set_ylabel("Users", fontsize=30)
+ax2.tick_params(axis='y', labelsize=30)
 
-generate_couple_chart(
-  data_frame_1=users_city_df.sort_values(by="customer_count", ascending=False).head(5),
-  data_frame_2=users_payment_type_df.sort_values(by="customer_count", ascending=False).head(5),
-  x_1="customer_city",
-  x_2="payment_type",
-  y_1="customer_count",
-  y_2="customer_count",
-  title_1="Number of User by City",
-  title_2="Number of User by Payment Type"
-)
+st.pyplot(fig)
 
 st.subheader("Best Customer Based on RFM Parameters")
 
